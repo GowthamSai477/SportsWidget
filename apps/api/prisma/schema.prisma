@@ -1,0 +1,618 @@
+// Universal sports data model — spec sections 7, 9, 10, 36.
+// Design notes in docs/DATABASE.md. All timestamps UTC.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum EventStatus {
+  SCHEDULED
+  CONFIRMED
+  LIVE
+  PAUSED
+  FINISHED
+  POSTPONED
+  CANCELLED
+  DELAYED
+  TBC
+}
+
+enum ParticipantType {
+  TEAM
+  PLAYER
+}
+
+enum Side {
+  HOME
+  AWAY
+  UNKNOWN
+}
+
+enum StandingType {
+  DRIVERS
+  CONSTRUCTORS
+  LEAGUE
+  CUSTOM
+}
+
+enum FavoriteType {
+  SPORT
+  COMPETITION
+  TEAM
+  PLAYER
+  EVENT
+}
+
+enum WidgetType {
+  BASIC
+  SCHEDULE
+  ENHANCED
+  LIVE
+  PREMIUM
+}
+
+enum PlanTier {
+  FREE
+  SILVER
+  GOLD
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+}
+
+enum NotificationCategory {
+  EVENT_STARTING
+  EVENT_STARTING_1H
+  EVENT_STARTING_30M
+  LIVE_STARTED
+  RESULT_AVAILABLE
+  SCHEDULE_CHANGE
+  EVENT_POSTPONED
+  EVENT_CANCELLED
+  CHAMPIONSHIP_UPDATE
+}
+
+enum SyncJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  DEAD
+}
+
+enum EntitlementSource {
+  PLAN
+  DEV_GRANT
+  MANUAL
+}
+
+// ---------- Identity ----------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  phone     String?  @unique
+  name      String?
+  avatarUrl String?
+  timezone  String   @default("UTC") // IANA name; display-side conversion
+  theme     String   @default("system") // dark | light | system
+  locale    String   @default("en")
+  planTier  PlanTier @default(FREE)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  devices       Device[]
+  favorites     Favorite[]
+  widgets       Widget[]
+  notifications Notification[]
+  preferences   NotificationPreference[]
+  subscriptions Subscription[]
+  entitlements  Entitlement[]
+  refreshTokens RefreshToken[]
+}
+
+// ---------- Sports catalogue ----------
+
+model Sport {
+  id          String  @id @default(cuid())
+  slug        String  @unique // "formula-1", "cricket", "football"
+  name        String
+  category    String // MOTORSPORT | CRICKET | FOOTBALL | TENNIS | BASKETBALL | COMBAT | OTHER
+  iconUrl     String?
+  accentColor String? // hex, drives UI theming per sport
+  sortOrder   Int     @default(100)
+  isActive    Boolean @default(true)
+
+  competitions    Competition[]
+  teams           Team[]
+  players         Player[]
+  providerSources ProviderSource[]
+  widgets         Widget[]
+  events          Event[]
+
+  @@index([category, isActive])
+}
+
+/// A followable tournament: "Formula 1", "Premier League", "IPL".
+model Competition {
+  id        String  @id @default(cuid())
+  sportId   String
+  slug      String  @unique
+  name      String
+  shortName String?
+  region    String?
+  logoUrl   String?
+  isActive  Boolean @default(true)
+
+  sport     Sport       @relation(fields: [sportId], references: [id])
+  standings Standings[]
+  widgets   Widget[]
+  seasons   Season[]
+  events    Event[]
+
+  @@index([sportId, isActive])
+}
+
+model Season {
+  id            String    @id @default(cuid())
+  competitionId String
+  name          String // "2026"
+  year          Int?
+  startDate     DateTime?
+  endDate       DateTime?
+  isCurrent     Boolean   @default(false)
+
+  competition Competition @relation(fields: [competitionId], references: [id])
+  rounds      Round[]
+  standings   Standings[]
+  events      Event[]
+
+  @@unique([competitionId, name])
+  @@index([isCurrent])
+}
+
+/// A race weekend / matchday grouping sessions or matches.
+model Round {
+  id        String    @id @default(cuid())
+  seasonId  String
+  number    Int?
+  label     String // "British Grand Prix"
+  startTime DateTime?
+  endTime   DateTime?
+  venueId   String?
+  metadata  Json? // sport-specific: { raceName, circuitRef, sprintWeekend }
+
+  season Season  @relation(fields: [seasonId], references: [id])
+  venue  Venue?  @relation(fields: [venueId], references: [id])
+  events Event[]
+
+  @@unique([seasonId, number])
+  @@index([seasonId, startTime])
+}
+
+model Venue {
+  id        String  @id @default(cuid())
+  slug      String  @unique
+  name      String
+  city      String?
+  country   String?
+  latitude  Float?
+  longitude Float?
+  timezone  String? // IANA tz at the venue
+  lengthKm  Float? // motorsport circuits
+  imageUrl  String?
+  metadata  Json?
+
+  rounds Round[]
+  events Event[]
+
+  @@index([country])
+}
+
+// ---------- Participants ----------
+
+model Team {
+  id        String  @id @default(cuid())
+  sportId   String
+  slug      String  @unique
+  name      String
+  shortName String? // "MER", "MI"
+  color     String? // hex accent
+  logoUrl   String?
+  country   String?
+  isActive  Boolean @default(true)
+
+  sport             Sport              @relation(fields: [sportId], references: [id])
+  players           Player[]
+  eventParticipants EventParticipant[]
+  standingEntries   StandingEntry[]
+
+  @@index([sportId])
+}
+
+model Player {
+  id          String    @id @default(cuid())
+  sportId     String
+  teamId      String?
+  slug        String
+  name        String
+  shortName   String? // 3-letter code: "VER"
+  number      Int?
+  nationality String?
+  dateOfBirth DateTime?
+  photoUrl    String?
+  isActive    Boolean   @default(true)
+  metadata    Json?
+
+  sport             Sport              @relation(fields: [sportId], references: [id])
+  team              Team?              @relation(fields: [teamId], references: [id])
+  eventParticipants EventParticipant[]
+  standingEntries   StandingEntry[]
+
+  @@unique([sportId, slug])
+  @@index([teamId])
+}
+
+// ---------- Events ----------
+
+/// Universal event: an F1 session, a cricket match, a football match.
+model Event {
+  id            String      @id @default(cuid())
+  sportId       String // denormalized for fast sport-scoped queries
+  competitionId String
+  seasonId      String?
+  roundId       String?
+  type          String // RACE | QUALIFYING | PRACTICE | SPRINT | MATCH | SESSION (per-sport vocabulary documented in DATABASE.md)
+  name          String
+  shortName     String?
+  startTime     DateTime
+  endTime       DateTime?
+  status        EventStatus @default(SCHEDULED)
+  statusDetail  String? // "Lap 23/70", "Rain delay"
+  venueId       String?
+  isBroadcast   Boolean     @default(false)
+  broadcastInfo Json? // channels/streaming per region
+  metadata      Json? // sport-specific payload, see spec section 10
+  lastSyncedAt  DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  sport         Sport              @relation(fields: [sportId], references: [id])
+  competition   Competition        @relation(fields: [competitionId], references: [id])
+  season        Season?            @relation(fields: [seasonId], references: [id])
+  round         Round?             @relation(fields: [roundId], references: [id])
+  venue         Venue?             @relation(fields: [venueId], references: [id])
+  participants  EventParticipant[]
+  results       EventResult[]
+  notifications Notification[]
+
+  @@index([sportId, startTime])
+  @@index([status, startTime])
+  @@index([competitionId, seasonId, startTime])
+  @@index([roundId])
+}
+
+model EventParticipant {
+  id       String          @id @default(cuid())
+  eventId  String
+  type     ParticipantType
+  teamId   String?
+  playerId String?
+  side     Side            @default(UNKNOWN)
+  label    String? // display code when neither team nor player fits
+  position Int? // starting position (grid slot)
+  metadata Json?
+
+  event   Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  team    Team?         @relation(fields: [teamId], references: [id])
+  player  Player?       @relation(fields: [playerId], references: [id])
+  results EventResult[]
+
+  @@index([eventId])
+  @@index([teamId])
+  @@index([playerId])
+}
+
+model EventResult {
+  id            String  @id @default(cuid())
+  eventId       String
+  participantId String
+  position      Int?
+  positionText  String? // "1", "DNF", "DSQ"
+  points        Float?
+  timeMs        Int?
+  gapMs         Int?
+  status        String? // FINISHED | RETIRED | DISQUALIFIED | NOT_OUT | ...
+  metadata      Json? // fastest lap, balls faced, overs bowled...
+
+  event       Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant EventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, participantId])
+  @@index([eventId, position])
+}
+
+// ---------- Standings ----------
+
+model Standings {
+  id            String       @id @default(cuid())
+  competitionId String
+  seasonId      String
+  type          StandingType
+  name          String // "Drivers' Championship"
+  dataUpdatedAt DateTime     @default(now())
+
+  competition Competition     @relation(fields: [competitionId], references: [id])
+  season      Season          @relation(fields: [seasonId], references: [id])
+  entries     StandingEntry[]
+
+  @@unique([competitionId, seasonId, type])
+}
+
+model StandingEntry {
+  id           String          @id @default(cuid())
+  standingsId  String
+  type         ParticipantType
+  teamId       String?
+  playerId     String?
+  position     Int
+  positionText String?
+  points       Float           @default(0)
+  wins         Int?
+  losses       Int?
+  draws        Int?
+  played       Int?
+  previousPos  Int?
+  metadata     Json? // podiums, poles, net run rate...
+
+  standings Standings @relation(fields: [standingsId], references: [id], onDelete: Cascade)
+  team      Team?     @relation(fields: [teamId], references: [id])
+  player    Player?   @relation(fields: [playerId], references: [id])
+
+  @@index([standingsId, position])
+}
+
+// ---------- Personalization ----------
+
+/// Polymorphic favorite: (type, targetId) addresses exactly one entity.
+model Favorite {
+  id        String       @id @default(cuid())
+  userId    String
+  type      FavoriteType
+  targetId  String
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, targetId])
+  @@index([userId])
+}
+
+// ---------- Widgets ----------
+
+model Widget {
+  id            String     @id @default(cuid())
+  userId        String
+  type          WidgetType
+  name          String
+  size          String     @default("medium") // small | medium | large
+  sportId       String?
+  competitionId String?
+  config        Json? // { focus: "NEXT_RACE"|"DRIVER"|"CONSTRUCTOR", driverCode, density }
+  instanceToken String     @unique // opaque token the native widget authenticates with
+  isActive      Boolean    @default(true)
+  lastDataAt    DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sport       Sport?       @relation(fields: [sportId], references: [id])
+  competition Competition? @relation(fields: [competitionId], references: [id])
+
+  @@index([userId])
+}
+
+// ---------- Devices ----------
+
+model Device {
+  id           String         @id @default(cuid())
+  userId       String
+  deviceId     String // client-generated stable UUID
+  name         String
+  platform     DevicePlatform
+  appVersion   String?
+  pushToken    String?
+  lastActiveAt DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+}
+
+// ---------- Notifications ----------
+
+model Notification {
+  id          String               @id @default(cuid())
+  userId      String
+  category    NotificationCategory
+  title       String
+  body        String
+  eventId     String?
+  data        Json?
+  sentAt      DateTime             @default(now())
+  deliveredAt DateTime?
+  readAt      DateTime?
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event? @relation(fields: [eventId], references: [id])
+
+  @@index([userId, sentAt(sort: Desc)])
+}
+
+model NotificationPreference {
+  id          String               @id @default(cuid())
+  userId      String
+  category    NotificationCategory
+  enabled     Boolean              @default(true)
+  leadMinutes Int? // override per-category lead time
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+}
+
+// ---------- Subscriptions (future-ready; inactive while DEVELOPMENT_MODE=true) ----------
+
+model SubscriptionPlan {
+  id                String   @id @default(cuid())
+  tier              PlanTier @unique
+  name              String
+  priceMonthlyCents Int
+  priceYearlyCents  Int
+  currency          String   @default("INR")
+  features          Json // { maxWidgets, maxSports, swipe, premiumWidgets, liveData, lockScreen }
+  isActive          Boolean  @default(true)
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  userId             String
+  planId             String
+  status             SubscriptionStatus
+  billingProvider    String? // play_store | app_store | revenuecat
+  externalId         String?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  user User             @relation(fields: [userId], references: [id])
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId, status])
+}
+
+/// Effective feature grants. DEV_GRANT rows are what DEVELOPMENT_MODE seeds;
+/// entitlement resolution prefers explicit grants over plan defaults.
+model Entitlement {
+  id        String            @id @default(cuid())
+  userId    String
+  key       String // WIDGET_SWIPE | LIVE_DATA | PREMIUM_WIDGET | LOCK_SCREEN | MULTI_DEVICE
+  source    EntitlementSource
+  expiresAt DateTime?
+  createdAt DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key, source])
+  @@index([userId])
+}
+
+// ---------- Providers & synchronization ----------
+
+model ProviderSource {
+  id              String  @id @default(cuid())
+  slug            String  @unique // "jolpica-f1", "mock-f1"
+  name            String
+  sportId         String?
+  baseUrl         String
+  rateLimitPerSec Float   @default(4)
+  config          Json? // adapter-specific settings
+  isActive        Boolean @default(true)
+
+  sport    Sport?            @relation(fields: [sportId], references: [id])
+  mappings ProviderMapping[]
+  syncJobs SyncJob[]
+  syncLogs SyncLog[]
+
+  @@index([sportId])
+}
+
+/// External ID <-> internal ID resolution. Internal IDs never leak to clients (spec section 11).
+model ProviderMapping {
+  id         String   @id @default(cuid())
+  sourceId   String
+  entityType String // competition | season | round | venue | team | player | event
+  externalId String
+  internalId String
+  lastSeenAt DateTime @default(now())
+
+  source ProviderSource @relation(fields: [sourceId], references: [id])
+
+  @@unique([sourceId, entityType, externalId])
+  @@index([sourceId, entityType, internalId])
+}
+
+model SyncJob {
+  id           String        @id @default(cuid())
+  sourceId     String?
+  jobType      String // schedule | live | standings | results
+  targetType   String? // event | competition | standings
+  targetId     String?
+  status       SyncJobStatus @default(PENDING)
+  scheduledFor DateTime      @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  attempts     Int           @default(0)
+  lastError    String?
+
+  source ProviderSource? @relation(fields: [sourceId], references: [id])
+  logs   SyncLog[]
+
+  @@index([status, scheduledFor])
+  @@index([jobType, status])
+}
+
+model SyncLog {
+  id             String    @id @default(cuid())
+  jobId          String?
+  sourceId       String
+  endpoint       String
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  recordsFetched Int       @default(0)
+  recordsUpdated Int       @default(0)
+  recordsSkipped Int       @default(0)
+  ok             Boolean   @default(true)
+  errors         Json?
+
+  job    SyncJob?       @relation(fields: [jobId], references: [id])
+  source ProviderSource @relation(fields: [sourceId], references: [id])
+
+  @@index([sourceId, startedAt(sort: Desc)])
+}
+
+/// Rotating refresh tokens; only SHA-256 hashes are persisted.
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
