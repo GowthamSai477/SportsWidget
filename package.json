@@ -1,0 +1,23 @@
+{
+  "name": "widgets",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Universal sports schedule platform with premium home-screen widgets",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.19.4"
+  },
+  "scripts": {
+    "infra:up": "docker compose up -d postgres redis",
+    "infra:down": "docker compose down",
+    "db:migrate": "npm run db:migrate --workspace apps/api",
+    "db:seed": "npm run db:seed --workspace apps/api",
+    "db:studio": "npm run db:studio --workspace apps/api",
+    "dev:api": "npm run start:dev --workspace apps/api",
+    "dev:mobile": "npm run start --workspace apps/mobile",
+    "test:api": "npm run test --workspace apps/api"
+  }
+}

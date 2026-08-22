@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+build/
+web-build/
+*.tsbuildinfo
+
+# expo / react-native
+.expo/
+android/
+ios/
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# docker volumes
+.docker-data/
+
+# testing
+coverage/
+
+# logs & os
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# ide
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# prisma generated client is installed via node_modules; nothing to ignore
