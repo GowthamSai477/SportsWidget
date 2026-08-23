@@ -43,7 +43,9 @@ npm run db:migrate     # create schema
 npm run db:seed        # sports catalog, F1 competition+season, plans, dev user
 
 npm run dev:api        # http://localhost:3000  (Swagger: /api/docs)
-npm run dev:mobile     # Expo dev server
+npm run dev:mobile     # Expo dev server — ALWAYS via this script or from inside apps/mobile
+                       # NEVER `npx expo start` from the repo root (monorepo: it resolves
+                       # the wrong project and fails with "Unable to resolve ../../App")
 ```
 
 Pull real F1 data:

@@ -41,3 +41,4 @@ Thumbs.db
 !.vscode/extensions.json
 
 # prisma generated client is installed via node_modules; nothing to ignore
+releases/
