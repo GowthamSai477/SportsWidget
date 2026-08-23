@@ -1,11 +1,11 @@
 import { Link, Stack } from "expo-router";
 import { Pressable, SectionList, Text, View } from "react-native";
-import { EmptyState, SkeletonRow } from "../../components/ui";
+import { EmptyState } from "../../components/ui";
 import { useCompetitions, useSports } from "../../hooks/queries";
 
 interface Section {
   title: string;
-  data: Array<{ slug: string; name: string; shortName: string | null; region: string | null; sport?: { slug: string; name: string } | null }>;
+  data: { slug: string; name: string; shortName: string | null; region: string | null; sport?: { slug: string; name: string } | null }[];
 }
 export default function SportsScreen() {
   const sports = useSports();

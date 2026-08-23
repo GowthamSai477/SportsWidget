@@ -38,7 +38,7 @@ export interface EventCardDto {
 export interface EventDetailDto extends Omit<EventCardDto, "sport" | "competition"> {
   season?: { name: string } | null;
   venue?: (EventCardDto["venue"] & { slug: string }) | null;
-  results: Array<{
+  results: {
     positionText: string | null;
     points: number | null;
     timeMs: number | null;
@@ -47,17 +47,16 @@ export interface EventDetailDto extends Omit<EventCardDto, "sport" | "competitio
     gridPosition: number | null;
     player: { slug: string; name: string; shortName: string | null; number: number | null } | null;
     team: { slug: string; name: string; shortName: string | null } | null;
-  }>;
+  }[];
 }
 
 export interface StandingsResponseDto {
   competition: { slug: string; name: string };
   season: string;
-  updatedAt: string;
-  tables: Array<{
+  tables: {
     type: string;
     name: string;
-    rows: Array<{
+    rows: {
       position: number;
       positionText?: string;
       code: string;
@@ -66,8 +65,8 @@ export interface StandingsResponseDto {
       wins: number | null;
       gapToLeader: number | null;
       isTeam: boolean;
-    }>;
-  }>;
+    }[];
+  }[];
 }
 
 export interface WidgetInstanceDto {

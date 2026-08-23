@@ -18,7 +18,6 @@ export interface EventCardData {
 }
 
 export function EventCard({ event, footer }: { event: EventCardData; footer?: React.ReactNode }) {
-  const accent = "#E10600";
   return (
     <View className="bg-surface-raised rounded-card p-4 mb-3 border border-surface-border">
       <View className="flex-row items-center justify-between">

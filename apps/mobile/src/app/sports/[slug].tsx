@@ -1,7 +1,6 @@
 import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
 import { Countdown } from "../../components/countdown";
-import { EventCard } from "../../components/event-card";
 import { EmptyState, SectionHeader } from "../../components/ui";
 import { useStandings, useUpcomingEvents } from "../../hooks/queries";
 

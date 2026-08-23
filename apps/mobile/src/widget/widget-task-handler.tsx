@@ -1,5 +1,4 @@
 import { FlexWidget, TextWidget, registerWidgetTaskHandler } from "react-native-android-widget";
-import type { WidgetTaskHandler } from "react-native-android-widget";
 import { advancePage, buildPremiumBody, currentPage, PAGE_COUNT } from "./widget-pages";
 import { assignedWidgetToken, fetchWidgetPayload } from "./widget-data";
 

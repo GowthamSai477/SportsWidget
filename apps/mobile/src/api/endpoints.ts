@@ -71,8 +71,7 @@ export const api = {
   competitions: (sportSlug?: string) =>
     request<CompetitionDto[]>(`/competitions${sportSlug ? `?sport=${sportSlug}` : ""}`),
 
-  competitionDetail: (slug: string) => request<CompetitionDto & { seasons: Array<{ name: string; isCurrent: boolean }> }>(`/competitions/${slug}`),
-
+  competitionDetail: (slug: string) => request<CompetitionDto & { seasons: { name: string; isCurrent: boolean }[] }>(`/competitions/${slug}`),
   upcomingEvents: (limit = 10, competitionSlug?: string) =>
     request<EventCardDto[]>(
       `/events/upcoming?limit=${limit}${competitionSlug ? `&competition=${competitionSlug}` : ""}`,
