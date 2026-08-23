@@ -1,184 +1,164 @@
 # Testing on Your Mobile — Samsung Galaxy S25 FE
 
-Three ways to test, from fastest to most complete. Pick **one** to start; use C when you want widgets.
-
-> **Golden rule:** your phone and this PC must be on the **same Wi-Fi network**, and the backend must be running.
+Three ways to test. **Start with the 5-minute checklist** — it solves 90% of
+"Unable to load" cases, which are network/firewall issues, not app bugs.
 
 ---
 
-## 0. One-time setup
+## ⚡ The 5-minute checklist (do this first)
 
-### 0.1 Find your PC's Wi-Fi IPv4
+The app bakes the backend URL at build time. If the URL is wrong for your
+current network — or the firewall blocks it — you get empty screens and a
+widget saying *"Open app to connect widget"*. Work through this in order:
+
+### 1. Backend must be running on the PC
+
+```bash
+# repo root
+docker compose up -d          # wait for "healthy"
+npm run dev:api               # keep this terminal OPEN
+curl localhost:3000/health    # must return {"status":"ok",...}
+curl -X POST localhost:3000/api/v1/sync/run -H "Content-Type: application/json" -d "{\"competitionSlug\":\"formula-1\"}"
+```
+
+### 2. Find your PC's IP on the network SHARED WITH THE PHONE
 
 ```powershell
 ipconfig
 ```
 
-Look under *Wireless LAN adapter Wi-Fi* → `IPv4 Address` (e.g. `10.36.76.19`). Your IP can change over time (DHCP) — re-run this if the app suddenly can't connect.
+| Your setup | Use this adapter's IPv4 |
+|---|---|
+| Phone hotspot, PC joined via Wi-Fi | *Wireless LAN adapter Wi-Fi* |
+| **Windows Mobile Hotspot** (PC shares to phone) | *Local Area Connection*\* → usually **192.168.137.1** |
+| USB cable connected | no IP needed — use `adb reverse` (Path B) |
 
-### 0.2 Point the app at your PC
+⚠️ This IP **changes between networks**. It is set in `apps/mobile/.env`
+(gitignored) as `EXPO_PUBLIC_API_URL`, and baked into the app at build/start
+time — changing `.env` requires restarting Metro, or rebuilding the APK.
 
-File: `apps/mobile/.env` (gitignored)
+### 3. Allow port 3000 through Windows Firewall (one-time, admin)
 
-```ini
-EXPO_PUBLIC_API_URL=http://10.36.76.19:3000/api/v1
+Hotspot networks are "Public" profile — Windows blocks inbound by default.
+Open **PowerShell as Administrator** and run:
+
+```powershell
+netsh advfirewall firewall add rule name="Widgets Dev API" dir=in action=allow protocol=TCP localport=3000 profile=any
+netsh advfirewall firewall add rule name="Widgets Metro" dir=in action=allow protocol=TCP localport=8081 profile=any
 ```
 
-This URL is **baked into the JS bundle at build/start time**. After changing it:
-- Expo Go / Metro → restart the dev server (`Ctrl+C`, then start again)
-- APK → rebuild (section C)
+Verify the rule: `netsh advfirewall firewall show rule name="Widgets Dev API"`.
 
-⚠️ Do **not** use `localhost` — on the phone that means the phone itself.
-⚠️ For an Android *emulator* instead, use `http://10.0.2.2:3000/api/v1`.
+### 4. Test from the PHONE'S BROWSER before touching the app
 
-### 0.3 Start the backend stack
+On the S25 FE, open Chrome and go to `http://<PC-IP>:3000/health`.
 
-```bash
-# repo root
-docker compose up -d          # postgres + redis (wait for "healthy")
-npm run dev:api               # NestJS on :3000  (keep this terminal open)
+- **Shows JSON** `{"status":"ok"...}` → network path is fine; the app will work.
+- **Doesn't load** → the problem is network/firewall/IP — fix steps 2–3 first.
+  This one test separates app bugs from network bugs instantly.
+
+### 5. Current fallback chain (already built into recent APKs)
+
+The app tries these in order and sticks with the first that answers:
+
+```
+1. EXPO_PUBLIC_API_URL            (primary — your current network)
+2. http://10.0.2.2:3000/api/v1    (Android emulator)
+3. http://localhost:3000/api/v1   (works over USB with adb reverse)
+4. http://192.168.137.1:3000/api/v1 (Windows Mobile Hotspot)
 ```
 
-Verify from the PC:
-
-```bash
-curl http://localhost:3000/health
-curl http://10.36.76.19:3000/health   # must ALSO answer via your LAN IP
-```
-
-If the second command fails but the first works → Windows Firewall is blocking Node on private networks. Allow Node.js through the firewall (first-run prompt, or *Windows Security → Firewall → Allow an app*).
-
-### 0.4 Sync F1 data so screens have content
-
-```bash
-curl -X POST localhost:3000/api/v1/sync/run \
-     -H "Content-Type: application/json" \
-     -d '{"competitionSlug":"formula-1"}'
-```
-
-After ~30s: `curl "localhost:3000/api/v1/events/upcoming?limit=3"` should list real races.
+So: **USB cable + `adb reverse tcp:3000 tcp:3000` makes ANY APK reach the
+backend regardless of Wi-Fi/firewall.**
 
 ---
 
-## A. Expo Go — fastest UI test (no install, no widgets)
+## Path A — USB + release APK (most reliable on-device test)
 
-1. Install **Expo Go** from the Play Store on the S25 FE.
-2. On the PC:
+1. Enable *Developer options → USB debugging* on the S25 FE.
+2. Connect USB, then on the PC:
 
    ```bash
-   npm run dev:mobile     # ALWAYS this script — never bare `npx expo start` at repo root
+   adb reverse tcp:3000 tcp:3000
+   adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
    ```
 
-   ⚠️ Running `npx expo start` from `F:\Gowtham\Projects\Widgets` fails with
-   `Unable to resolve "../../App"` — see DEVELOPMENT.md. Root ≠ mobile project.
-3. Scan the QR code from the Expo terminal with the phone's camera.
-4. The app compiles on-device (~30 s first time), then opens.
+3. Launch the app. Data flows over USB — no Wi-Fi, no firewall concerns.
 
-**What you should see:** Home tab ("Your sports command center", live-now section, upcoming events with a ticking countdown), Schedule/Sports/Profile tabs. If data is empty but no red screen → the API URL or sync is off, not the app.
+## Path B — Wi-Fi / hotspot (no cable)
 
-Widgets do **nothing** in Expo Go — that's expected (native code isn't included).
-
----
-
-## B. Debug build (dev build) — hot reload on the phone
-
-Use when iterating with full native modules. Needs USB + Metro running.
-
-```bash
-cd apps/mobile
-npx expo prebuild -p android        # only needed after changing plugins/app.json
-cd android
-gradlew.bat assembleDebug           # output: app\build\outputs\apk\debug\app-debug.apk
-adb install -r app\build\outputs\apk\debug\app-debug.apk
-
-# let the PHONE reach your PC's Metro (:8081) and API (:3000) over USB:
-adb reverse tcp:8081 tcp:8081
-adb reverse tcp:3000 tcp:3000
-
-# watch logs while using the app:
-adb logcat --pid=$(adb shell pidof -s $(adb shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER | tail -1 | cut -d/ -f1)) 2>nul || adb logcat *:E ReactNativeJS:V
-```
-
-Launch the app on the phone. With `adb reverse` active, the debug build reaches Metro and the API through USB even if Wi-Fi/firewall misbehave. JS edits hot-reload automatically while Metro runs.
-
-> Debug APKs contain **no JavaScript** — without Metro reachable they show a blank/"unable to load" screen. That's normal, not a bug.
-
----
-
-## C. Release APK — standalone install (widgets work here) ✅ recommended
-
-No PC, no cable, no Metro needed after install — the JS bundle and API URL are baked in.
-
-1. Build (PC):
+1. Complete the 5-minute checklist (IP + firewall + phone-browser test).
+2. Set `apps/mobile/.env` → `EXPO_PUBLIC_API_URL=http://<PC-IP>:3000/api/v1`.
+3. Rebuild + reinstall:
 
    ```bash
    cd apps/mobile/android
    gradlew.bat assembleRelease
-   # output: app\build\outputs\apk\release\app-release.apk
-   # a renamed copy already exists at <repo>\releases\sports-widget-v0.1.0.apk
+   adb install -r app/build/outputs/apk/release/app-release.apk
    ```
 
-2. Transfer `app-release.apk` to the phone (USB, Google Drive, whatever).
-3. On the phone: open the APK → allow *"Install unknown apps"* for that source → Install.
-4. Launch **Widgets** from the launcher.
+## Path C — Expo Go (UI iteration only; widgets do NOT work here)
 
-**Expected first launch:** splash → Home tab with the dark theme → events appear within seconds (offline cache shows instantly; fresh data arrives right after).
+```bash
+npm run dev:mobile     # from repo root — NEVER bare `npx expo start` at root
+```
+
+Scan the QR. If Expo Go says *"incompatible"* → update Expo Go from the Play
+Store (must match the project's SDK 57) — or just use Path A/B.
 
 ---
 
-## D. Testing the home-screen widget
+## Android Studio workflow
 
-Prerequisite: section C installed (Expo Go won't do).
-
-1. In the app: **Profile → Widgets** (or any competition screen → *Manage*).
-2. Under *Add a widget*, tap **Create widget instance** (e.g. *Premium Multi-Page*). A row appears with its token.
-3. **Tap that row once** — this links your widget families to the instance.
-4. On the phone's home screen: long-press empty space → **Widgets** → **Widgets** app → pick
-   *F1 Premium* (4×2), *F1 Next Session* (2×2), or *F1 Weekend* (4×3) → place it.
-5. The widget renders immediately: event name, countdown, freshness timestamp.
-6. Tap the **‹ / ›** side strips to flip pages (countdown ⇄ championship top-5) — page indicator bottom-right.
-7. Place one of the mock-data scenarios to see state labels:
+1. **Open** `F:\Gowtham\Projects\Widgets\apps\mobile\android` in Android Studio
+   (it is a standard Gradle project). Let Gradle sync (JDK 17).
+2. **Run ▶** with the S25 FE selected → builds & installs a **debug** variant.
+3. Debug builds need Metro + reverse (they contain no JS):
 
    ```bash
-   curl -X POST localhost:3000/api/v1/sync/run -H "Content-Type: application/json" ^
-        -d "{\"competitionSlug\":\"formula-1\",\"providerSlug\":\"mock-f1\"}"
+   npm run dev:mobile        # terminal 1
+   adb reverse tcp:8081 tcp:8081
+   adb reverse tcp:3000 tcp:3000
    ```
 
-   While the payload is fixture-derived the widget/app shows an amber **MOCK DATA** tag — never presented as real.
-
-Refresh cadence reality check: Android updates system widgets at ≥30-minute intervals; taps and opening the app refresh sooner. Sub-minute countdown precision inside the widget is not guaranteed by the platform.
+4. **Logcat** window → filter `ReactNativeJS` → live app logs and errors.
+5. For a standalone build: Build → *Generate Signed App Bundle* not needed in
+   dev — use `gradlew.bat assembleRelease` (debug-keystore signed) as before.
 
 ---
 
-## Release APK + HTTP: cleartext
+## Widget test (needs Path A or B working in-app first)
 
-Android RELEASE builds block plain `http://` API calls by default (debug builds allow them — one reason a debug APK may "work" while release shows empty screens). This project enables `usesCleartextTraffic` via the `expo-build-properties` plugin for development. Before any production release, move the API to HTTPS and remove that flag.
+1. App → **Profile → Widgets** → *Create instance* (auto-links to all families).
+2. Long-press the home screen → **Widgets** → **Widgets** → pick
+   *F1 Premium* (4×2) / *F1 Next Session* (2×2) / *F1 Weekend* (4×3) → place.
+3. Widget shows: event name, countdown, freshness timestamp.
+4. Tap **‹ / ›** side strips → flips countdown ⇄ standings (page dots below).
+5. Reboot the phone → widget persists and keeps refreshing.
+
+If the widget shows *"Open app to connect widget"*: the headless task could not
+reach the backend (same network cause as section ⚡) or no instance was linked
+(open the app → Widgets → tap an instance row).
+
+---
 
 ## Troubleshooting
 
 | Symptom | Cause → Fix |
 |---|---|
-| `Unable to resolve "../../App" from node_modules\expo\AppEntry.js` (on PC) | Started Expo from repo root → use `npm run dev:mobile` or `cd apps/mobile`. See DEVELOPMENT.md |
-| App loads but lists are empty, no error | Backend not started or not synced → section 0.3/0.4 |
-| App shows "Network unavailable"/empty everywhere on phone, works on PC | Wrong `EXPO_PUBLIC_API_URL`, IP changed (re-run `ipconfig`), or firewall blocks :3000 → sections 0.1–0.3 |
-| Debug APK opens blank/white | Normal for debug without Metro → use `adb reverse` (B) or the release APK (C) |
-| Phone can't reach API but PC curl on LAN IP works | Phone on different Wi-Fi/network (guest networks isolate clients), or firewall |
-| `prisma` errors mentioning `HOME` on PC | `export HOME="$USERPROFILE"` before npm/prisma commands |
-| Widget stuck on "Open the app to connect" | You skipped step D-3 (tap the instance row to link it) |
-| Changed `.env` but nothing happened | Restart Metro, or rebuild the APK — the URL is compile-time |
+| Phone browser can't open `/health` | Firewall rule missing (step ⚡3), wrong IP (⚡2), or different network |
+| App loads but lists are empty | Backend not synced → run the sync curl from ⚡1 |
+| Widget: "Open app to connect" | Link an instance (tap it in Widgets screen) + backend reachable |
+| Debug APK opens blank | Normal — needs Metro + `adb reverse tcp:8081` (Path via Android Studio) |
+| `Unable to resolve "../../App"` on PC | Expo started from repo root → use `npm run dev:mobile` |
+| Changed `.env`, nothing happened | Restart Metro / rebuild APK — the URL is compile-time |
+| Worked yesterday, dead today | PC IP changed (DHCP) → re-run `ipconfig`, update `.env` |
 
 ---
 
-## Quick smoke checklist
+## Future: deployed backend
 
-```
-[ ] docker compose ps            postgres+redis healthy
-[ ] curl localhost:3000/health   {"status":"ok"}
-[ ] curl http://<LAN-IP>:3000/health   200 (firewall OK)
-[ ] upcoming events return rows  (sync done)
-[ ] npm run dev:mobile           QR appears (or release APK installed)
-[ ] App home shows events with countdown
-[ ] Standings render (Competition → Championship)
-[ ] Event detail opens (tap any race)
-[ ] Widget placed, renders, pages flip on tap
-```
+When the API is deployed (e.g. `https://api.widgets.example.com`), set
+`EXPO_PUBLIC_API_URL=https://…` and rebuild — the app then works from ANY
+network with no firewall/LAN setup. HTTPS also removes the need for the
+cleartext-traffic flag on release builds.

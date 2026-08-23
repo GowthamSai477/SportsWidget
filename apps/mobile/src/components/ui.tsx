@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
+import { currentBaseUrl } from "../api/base-url";
 import type { ComponentProps } from "react";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -41,7 +42,7 @@ export function ErrorState({ message, onRetry }: { message?: string; onRetry?: (
       </View>
       <Text className="text-ink text-base font-bold mt-4">Unable to load</Text>
       <Text className="text-ink-dim text-sm text-center mt-1 leading-5" numberOfLines={3}>
-        {message ?? "Check that the backend is running and this device can reach it."}
+        {message ?? `Backend not reachable at ${currentBaseUrl().replace("http://","")} — check .env, firewall, or use adb reverse (see docs/MOBILE_TESTING.md).`}
       </Text>
       {onRetry ? (
         <Pressable
