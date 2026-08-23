@@ -55,7 +55,7 @@ curl -X POST localhost:3000/api/v1/sync/run \
      -H "Content-Type: application/json" -d '{"competitionSlug":"formula-1"}'
 ```
 
-Device testing: set `EXPO_PUBLIC_API_URL=http://<LAN-IP>:3000/api/v1` in `apps/mobile/.env`. Widgets need a dev build (`expo prebuild -p android` + `gradlew.bat assembleDebug`) — see docs/WIDGETS.md.
+Device testing on your phone: see **[docs/MOBILE_TESTING.md](docs/MOBILE_TESTING.md)** (Expo Go, debug build, release APK + widget setup).
 
 ## Documentation
 
