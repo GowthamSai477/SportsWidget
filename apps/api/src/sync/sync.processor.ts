@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { OnWorkerEvent, Processor, WorkerHost } from "@nestjs/bullmq";
 import { Logger } from "@nestjs/common";
 import { Job } from "bullmq";
 import type { LiveJobData, ResultsJobData, ScheduleJobData, StandingsJobData } from "./queues";
@@ -11,6 +11,12 @@ export class SyncProcessor extends WorkerHost {
 
   constructor(private readonly sync: SyncService) {
     super();
+  }
+
+  /** Worker/connection-level failures must log, never crash the API. */
+  @OnWorkerEvent("error")
+  onWorkerError(err: Error): void {
+    this.logger.warn(`Sync worker error: ${err.message}`);
   }
 
   async process(job: Job): Promise<unknown> {
