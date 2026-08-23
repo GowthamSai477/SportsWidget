@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import type { Prisma, ProviderSource } from "@prisma/client";
+import { Prisma, type ProviderSource } from "@prisma/client";
 import { PrismaService } from "../infra/prisma/prisma.service";
 
 /**
@@ -51,4 +51,25 @@ export class MappingsService {
       select: { internalId: true },
     });
   }
+
+  /**
+   * Create an entity; if a unique-constraint violation reveals that the row
+   * already exists (e.g. mappings lost while entities survived), adopt the
+   * existing row instead of failing the whole sync.
+   */
+  async adoptOnConflict(
+    createEntity: () => Promise<string>,
+    findExisting: () => Promise<string | null>,
+  ): Promise<string> {
+    try {
+      return await createEntity();
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        const existing = await findExisting();
+        if (existing) return existing;
+      }
+      throw err;
+    }
+  }
 }
+

@@ -105,18 +105,27 @@ export class SyncService {
       const venueId = round.venue
         ? (
             await this.mappings.resolveInternalId(source, "venue", round.venue.externalId, async () => {
-              const venue = await this.prisma.venue.create({
-                data: {
-                  slug: round.venue!.externalId,
-                  name: round.venue!.name,
-                  city: round.venue!.city,
-                  country: round.venue!.country,
-                  latitude: round.venue!.latitude,
-                  longitude: round.venue!.longitude,
-                  metadata: schedule.mock ? { mock: true } : undefined,
+              const venueId = await this.mappings.adoptOnConflict(
+                async () => {
+                  const venue = await this.prisma.venue.create({
+                    data: {
+                      slug: round.venue!.externalId,
+                      name: round.venue!.name,
+                      city: round.venue!.city,
+                      country: round.venue!.country,
+                      latitude: round.venue!.latitude,
+                      longitude: round.venue!.longitude,
+                      metadata: schedule.mock ? { mock: true } : undefined,
+                    },
+                  });
+                  return venue.id;
                 },
-              });
-              return venue.id;
+                () =>
+                  this.prisma.venue
+                    .findUnique({ where: { slug: round.venue!.externalId }, select: { id: true } })
+                    .then((v) => v?.id ?? null),
+              );
+              return venueId;
             })
           ).internalId
         : null;
@@ -258,7 +267,7 @@ export class SyncService {
       } catch (err) {
         // Kind unsupported by this provider/sport — skip silently unless unexpected.
         if (!(err instanceof ProviderError)) {
-          this.logger.warn(`Standings ${kind} failed for ${provider.slug}: ${(err as Error).message}`);
+          this.logger.warn(`Standings ${kind} failed for ${provider.slug}: ${(err as Error).stack ?? String(err)}`);
         }
       }
     }
@@ -292,25 +301,40 @@ export class SyncService {
     const sportId = sport.sportId;
     const sportPrefix = sport.sport.slug.replace(/[^a-z0-9-]/gi, "");
 
-    const resolveTeam = async (teamExternalId?: string, teamName?: string): Promise<string | null> => {
+    const resolveTeam = async (
+      teamExternalId?: string,
+      teamName?: string,
+      shortNameOverride?: string,
+    ): Promise<string | null> => {
       if (!teamExternalId) return null;
       const { internalId } = await this.mappings.resolveInternalId(
         { id: sourceId },
         "team",
         teamExternalId,
         async () => {
-          const team = await this.prisma.team.create({
-            data: {
-              sportId,
-              slug: `${sportPrefix}-${teamExternalId}`,
-              name: teamName ?? teamExternalId,
-              shortName: (entries.find((e) => e.teamExternalId === teamExternalId)?.code ?? teamExternalId.slice(0, 3)).toUpperCase(),
-              isActive: true,
+          const teamSlug = `${sportPrefix}-${teamExternalId}`;
+          const displayName = teamName ?? teamExternalId;
+          const shortName = shortNameOverride ?? displayName.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase();
+          const teamId = await this.mappings.adoptOnConflict(
+            async () => {
+              const team = await this.prisma.team.create({
+                data: { sportId, slug: teamSlug, name: displayName, shortName, isActive: true },
+              });
+              return team.id;
             },
-          });
-          return team.id;
+            () => this.prisma.team.findUnique({ where: { slug: teamSlug }, select: { id: true } }).then((t) => t?.id ?? null),
+          );
+          return teamId;
         },
       );
+      // Refresh display fields on every pass — adopted rows may predate
+      // correct naming, and provider names drift over a season.
+      const displayName = teamName ?? teamExternalId;
+      const shortName = shortNameOverride ?? displayName.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase();
+      await this.prisma.team.update({
+        where: { id: internalId },
+        data: { name: displayName, shortName },
+      });
       return internalId;
     };
 
@@ -329,27 +353,37 @@ export class SyncService {
       if (!isTeamEntry && entry.code !== undefined) {
         playerId = (
           await this.mappings.resolveInternalId({ id: sourceId }, "player", entry.externalId, async () => {
-            const player = await this.prisma.player.create({
-              data: {
-                sportId,
-                teamId: entry.teamExternalId ? teamIds.get(entry.teamExternalId) ?? null : null,
-                slug: entry.externalId,
-                name: entry.name,
-                shortName: entry.code?.toUpperCase(),
-                number: entry.number,
-                nationality: entry.nationality,
-                isActive: true,
+            const playerId = await this.mappings.adoptOnConflict(
+              async () => {
+                const player = await this.prisma.player.create({
+                  data: {
+                    sportId,
+                    teamId: entry.teamExternalId ? teamIds.get(entry.teamExternalId) ?? null : null,
+                    slug: entry.externalId,
+                    name: entry.name,
+                    shortName: entry.code?.toUpperCase(),
+                    number: entry.number,
+                    nationality: entry.nationality,
+                    isActive: true,
+                  },
+                });
+                return player.id;
               },
-            });
-            return player.id;
+              () =>
+                this.prisma.player
+                  .findUnique({ where: { sportId_slug: { sportId, slug: entry.externalId } }, select: { id: true } })
+                  .then((p) => p?.id ?? null),
+            );
+            return playerId;
           })
         ).internalId;
       }
-      const teamId = isTeamEntry && entry.teamExternalId === undefined
-        ? teamIds.get(entry.externalId) ?? (await resolveTeam(entry.externalId, entry.name))
-        : entry.teamExternalId
-          ? teamIds.get(entry.teamExternalId) ?? null
-          : null;
+      const teamId =
+        isTeamEntry && entry.teamExternalId === undefined
+          ? teamIds.get(entry.externalId) ?? (await resolveTeam(entry.externalId, entry.name, entry.code))
+          : entry.teamExternalId
+            ? teamIds.get(entry.teamExternalId) ?? null
+            : null;
       participantIds.push({ entryIdx: i, teamId, playerId });
     }
 
@@ -406,28 +440,54 @@ export class SyncService {
     for (const row of results.rows) {
       const playerId = (
         await this.mappings.resolveInternalId(source, "player", row.participantExternalId, async () => {
-          const player = await this.prisma.player.create({
-            data: {
-              sportId: competition.sportId,
-              slug: row.participantExternalId,
-              name: row.name,
-              shortName: row.code?.toUpperCase(),
-              teamId: row.teamExternalId !== undefined
-                ? (
-                    await this.mappings.resolveInternalId(source, "team", row.teamExternalId, async () => {
-                      const externalId: string = row.teamExternalId as string;
-                      const team = await this.prisma.team.create({
-                        data: { sportId: competition.sportId, slug: `f1-${externalId}`, name: externalId, isActive: true },
-                      });
-                      return team.id;
-                    })
-                  ).internalId
-                : null,
-              isActive: true,
-            },
-          });
-          return player.id;
-        })
+            const playerId = await this.mappings.adoptOnConflict(
+              async () => {
+                const player = await this.prisma.player.create({
+                  data: {
+                    sportId: competition.sportId,
+                    slug: row.participantExternalId,
+                    name: row.name,
+                    shortName: row.code?.toUpperCase(),
+                    number: row.number,
+                    teamId:
+                      row.teamExternalId !== undefined
+                        ? (
+                            await this.mappings.resolveInternalId(source, "team", row.teamExternalId, () =>
+                              this.mappings.adoptOnConflict(
+                                async () => {
+                                  const team = await this.prisma.team.create({
+                                    data: {
+                                      sportId: competition.sportId,
+                                      slug: `f1-${row.teamExternalId}`,
+                                      name: String(row.teamExternalId),
+                                      isActive: true,
+                                    },
+                                  });
+                                  return team.id;
+                                },
+                                () =>
+                                  this.prisma.team
+                                    .findUnique({ where: { slug: `f1-${row.teamExternalId}` }, select: { id: true } })
+                                    .then((t) => t?.id ?? null),
+                              ),
+                            )
+                          ).internalId
+                        : null,
+                    isActive: true,
+                  },
+                });
+                return player.id;
+              },
+              () =>
+                this.prisma.player
+                  .findUnique({
+                    where: { sportId_slug: { sportId: competition.sportId, slug: row.participantExternalId } },
+                    select: { id: true },
+                  })
+                  .then((p) => p?.id ?? null),
+            );
+            return playerId;
+          })
       ).internalId;
 
       let participant = await this.prisma.eventParticipant.findFirst({
