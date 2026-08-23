@@ -2,10 +2,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FlexWidget, TextWidget } from "react-native-android-widget";
 import type { WidgetPayload } from "@widgets/shared";
 
-const ACCENT = "#E10600";
+const BG = "#0b0e14f2";
+const INK = "#f2f5fa";
+const DIM = "#9aa5b5";
+const FAINT = "#6b7688";
+const ACCENT = "#e10600";
+const DIVIDER = "#232a38";
+
+export const PAGE_COUNT = 2;
 
 const pageKey = (widgetId: string) => `widget.page.${widgetId}`;
-export const PAGE_COUNT = 2;
 
 export async function currentPage(widgetId: string, pageCount: number): Promise<number> {
   const raw = await AsyncStorage.getItem(pageKey(widgetId));
@@ -18,73 +24,180 @@ export async function advancePage(widgetId: string, delta: number, pageCount: nu
   await AsyncStorage.setItem(pageKey(widgetId), String(next));
 }
 
-function countdownText(targetIso: string): string {
+function countdownText(targetIso: string, compact = false): string {
   const total = new Date(targetIso).getTime() - Date.now();
-  if (total <= 0) return "LIVE / DONE";
+  if (total <= 0) return "RUNNING";
   const d = Math.floor(total / 86_400_000);
   const h = Math.floor((total % 86_400_000) / 3_600_000);
   const m = Math.floor((total % 3_600_000) / 60_000);
-  const s = Math.floor((total % 60_000) / 1000);
   const pad = (x: number) => String(x).padStart(2, "0");
-  return d > 0 ? `${d}d ${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(h)}:${pad(m)}:${pad(s)}`;
+  if (compact) return d > 0 ? `${d}d ${pad(h)}h ${pad(m)}m` : `${pad(h)}:${pad(m)}:${pad(Math.floor((total % 60_000) / 1000))}`;
+  return `${pad(h)}:${pad(m)}:${pad(Math.floor((total % 60_000) / 1000))}`;
 }
 
-/** Page 1: next session + countdown (spec section 29 page model). */
-function NextPage({ payload }: { payload: WidgetPayload }) {
-  const p = payload.primary;
+function shortDate(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+/** Red brand chip + section label used across widget headers. */
+function Header({ label }: { label: string }) {
   return (
-    <FlexWidget style={{ flex: 1, justifyContent: "center", alignItems: "flex-start", padding: 10 }}>
-      <TextWidget text={payload.sport.name.toUpperCase()} style={{ fontSize: 9, color: "#9AA5B5" }} />
-      <TextWidget text={p?.name ?? "No event scheduled"} style={{ fontSize: 14, color: "#F2F5FA", fontWeight: "bold", marginTop: 2 }} />
-      <TextWidget text={p ? countdownText(p.startTime) : "—"} style={{ fontSize: 18, color: ACCENT, fontWeight: "bold", marginTop: 4 }} />
-      <TextWidget text={p ? new Date(p.startTime).toLocaleString() : ""} style={{ fontSize: 9, color: "#9AA5B5", marginTop: 2 }} />
-      {payload.mock ? <TextWidget text="MOCK DATA" style={{ fontSize: 8, color: "#FFB300", marginTop: 2 }} /> : null}
+    <FlexWidget style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "match_parent" }}>
+      <FlexWidget style={{ backgroundColor: ACCENT, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+        <TextWidget text="F1" style={{ color: "#ffffff", fontSize: 9, fontWeight: "bold" }} />
+      </FlexWidget>
+      <TextWidget text={label.toUpperCase()} style={{ color: DIM, fontSize: 9, letterSpacing: 1 }} />
     </FlexWidget>
   );
 }
 
-/** Page 2: championship standings slice. */
-function StandingsPage({ payload }: { payload: WidgetPayload }) {
+function Divider() {
+  return <FlexWidget style={{ width: "match_parent", height: 1, backgroundColor: DIVIDER, marginVertical: 5 }} />;
+}
+
+function PageDots({ active }: { active: number }) {
   return (
-    <FlexWidget style={{ flex: 1, flexDirection: "column", justifyContent: "center", padding: 8 }}>
-      <TextWidget text="CHAMPIONSHIP" style={{ fontSize: 9, color: "#9AA5B5", marginBottom: 4 }} />
-      {payload.standings.slice(0, 5).map((row) => (
-        <FlexWidget key={`${row.position}-${row.code}`} style={{ flexDirection: "row", justifyContent: "space-between", width: "match_parent", paddingVertical: 1 }}>
-          <TextWidget text={`${row.position}  ${row.code}`} style={{ fontSize: 11, color: "#F2F5FA", fontWeight: "bold" }} />
-          <TextWidget text={String(row.points)} style={{ fontSize: 11, color: "#9AA5B5" }} />
-        </FlexWidget>
+    <FlexWidget style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", width: "match_parent", marginTop: 3 }}>
+      {Array.from({ length: PAGE_COUNT }, (_, i) => (
+        <FlexWidget
+          key={i}
+          style={{
+            width: i === active ? 10 : 4,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: i === active ? ACCENT : DIVIDER,
+            marginLeft: i > 0 ? 3 : 0,
+          }}
+        />
       ))}
     </FlexWidget>
   );
 }
 
+/* ---------------- Premium page 1: countdown ---------------- */
+
+function PremiumCountdownPage({ payload, page }: { payload: WidgetPayload; page: number }) {
+  const p = payload.primary;
+  return (
+    <FlexWidget style={{ flex: 1, width: "match_parent", flexDirection: "column", justifyContent: "center" }}>
+      <Header label={p?.type.replace(/_/g, " ") ?? "next session"} />
+      <TextWidget
+        text={(p?.name ?? "No upcoming session").toUpperCase()}
+        style={{ color: INK, fontSize: 12, fontWeight: "bold", marginTop: 4 }}
+        maxLines={1}
+      />
+      <FlexWidget style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", width: "match_parent", marginTop: 2 }}>
+        <TextWidget text={p ? shortDate(p.startTime) : ""} style={{ color: DIM, fontSize: 10 }} />
+        <TextWidget text={p ? countdownText(p.startTime) : "—"} style={{ color: INK, fontSize: 15, fontWeight: "bold" }} />
+      </FlexWidget>
+      <Divider />
+      {/* Standings preview keeps information density on the first page */}
+      {payload.standings.slice(0, 2).map((row) => (
+        <FlexWidget key={`${row.position}-${row.code}`} style={{ flexDirection: "row", justifyContent: "space-between", width: "match_parent", paddingVertical: 1 }}>
+          <TextWidget text={`${row.position}  ${row.code}   ${row.name.split(" ").pop() ?? ""}`} style={{ color: INK, fontSize: 10, fontWeight: "bold" }} maxLines={1} />
+          <TextWidget text={`${row.points} pts`} style={{ color: DIM, fontSize: 10 }} />
+        </FlexWidget>
+      ))}
+      <PageDots active={page} />
+      {payload.mock ? <TextWidget text="MOCK DATA" style={{ color: "#ffb300", fontSize: 7, marginTop: 2 }} /> : null}
+    </FlexWidget>
+  );
+}
+
+/* ---------------- Premium page 2: full standings ---------------- */
+
+function PremiumStandingsPage({ payload, page }: { payload: WidgetPayload; page: number }) {
+  return (
+    <FlexWidget style={{ flex: 1, width: "match_parent", flexDirection: "column", justifyContent: "center" }}>
+      <Header label="championship" />
+      <TextWidget text={payload.standings[0]?.isTeam ? "Constructors" : "Drivers"} style={{ color: INK, fontSize: 11, fontWeight: "bold", marginTop: 3, marginBottom: 2 }} />
+      {payload.standings.slice(0, 5).map((row) => (
+        <FlexWidget key={`${row.position}-${row.code}`} style={{ flexDirection: "row", justifyContent: "space-between", width: "match_parent", paddingVertical: 1.5 }}>
+          <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
+            <TextWidget text={String(row.position)} style={{ color: FAINT, fontSize: 10, width: 12 }} />
+            <TextWidget text={row.code} style={{ color: INK, fontSize: 11, fontWeight: "bold", width: 34 }} />
+            <TextWidget text={row.name} style={{ color: DIM, fontSize: 10 }} maxLines={1} />
+          </FlexWidget>
+          <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
+            {row.gapToLeader ? <TextWidget text={`+${row.gapToLeader}`} style={{ color: FAINT, fontSize: 9, marginRight: 5 }} /> : null}
+            <TextWidget text={`${row.points}`} style={{ color: INK, fontSize: 11, fontWeight: "bold" }} />
+          </FlexWidget>
+        </FlexWidget>
+      ))}
+      <PageDots active={page} />
+    </FlexWidget>
+  );
+}
+
 /**
- * Premium multi-page widget body with tap-to-cycle navigation. Android
- * RemoteViews cannot host gesture swipes; tapping the side strips flips pages
- * (platform limitation documented in DECISIONS.md D9 and WIDGETS.md).
+ * Premium multi-page body. Android RemoteViews cannot host gesture swipes;
+ * tapping the side strips cycles pages via click actions (DECISIONS.md D9).
  */
 export async function buildPremiumBody(payload: WidgetPayload, widgetName: string): Promise<React.ReactElement> {
-  const pages = [NextPage, StandingsPage];
-  const page = await currentPage(widgetName, pages.length);
-  const Page = pages[page] ?? NextPage;
+  const page = await currentPage(widgetName, PAGE_COUNT);
+  const inner = page === 1 ? <PremiumStandingsPage payload={payload} page={page} /> : <PremiumCountdownPage payload={payload} page={page} />;
 
   return (
-    <FlexWidget style={{ flexDirection: "row", backgroundColor: "#0B0E14EE", borderRadius: 16, height: "match_parent", width: "match_parent" }}>
-      <FlexWidget clickAction="PAGE_PREV" style={{ width: 26, height: "match_parent", justifyContent: "center", alignItems: "center" }}>
-        <TextWidget text="‹" style={{ color: "#5B6675", fontSize: 16 }} />
+    <FlexWidget style={{ flexDirection: "row", backgroundColor: BG, borderRadius: 14, height: "match_parent", width: "match_parent", padding: 8 }}>
+      <FlexWidget clickAction="PAGE_PREV" style={{ width: 22, height: "match_parent", justifyContent: "center", alignItems: "center" }}>
+        <TextWidget text="‹" style={{ color: FAINT, fontSize: 14 }} />
       </FlexWidget>
+      <FlexWidget style={{ flex: 1, height: "match_parent" }}>{inner}</FlexWidget>
+      <FlexWidget clickAction="PAGE_NEXT" style={{ width: 22, height: "match_parent", justifyContent: "center", alignItems: "center" }}>
+        <TextWidget text="›" style={{ color: FAINT, fontSize: 14 }} />
+      </FlexWidget>
+    </FlexWidget>
+  );
+}
 
-      <FlexWidget style={{ flex: 1, height: "match_parent" }}>
-        <Page payload={payload} />
-      </FlexWidget>
+/* ---------------- f1_next: compact 2×2 ---------------- */
 
-      <FlexWidget clickAction="PAGE_NEXT" style={{ width: 26, height: "match_parent", justifyContent: "center", alignItems: "center" }}>
-        <TextWidget text="›" style={{ color: "#5B6675", fontSize: 16 }} />
-      </FlexWidget>
+export function buildNextBody(payload: WidgetPayload): React.ReactElement {
+  const p = payload.primary;
+  return (
+    <FlexWidget style={{ backgroundColor: BG, borderRadius: 14, height: "match_parent", width: "match_parent", flexDirection: "column", justifyContent: "center", padding: 8 }}>
+      <Header label="next session" />
+      <TextWidget text={(p?.name ?? "No session").toUpperCase()} style={{ color: INK, fontSize: 11, fontWeight: "bold", marginTop: 4 }} maxLines={2} />
+      <TextWidget text={p ? countdownText(p.startTime, true) : "—"} style={{ color: INK, fontSize: 17, fontWeight: "bold", marginTop: 3 }} />
+      <TextWidget text={p ? shortDate(p.startTime) : ""} style={{ color: DIM, fontSize: 9, marginTop: 1 }} />
+      {payload.mock ? <TextWidget text="MOCK DATA" style={{ color: "#ffb300", fontSize: 7, marginTop: 2 }} /> : null}
+    </FlexWidget>
+  );
+}
 
-      <FlexWidget style={{ width: 18, height: "match_parent", justifyContent: "flex-end", alignItems: "flex-end", paddingRight: 6, paddingBottom: 6 }}>
-        <TextWidget text={`${page + 1}/${pages.length}`} style={{ fontSize: 8, color: "#5B6675" }} />
+/* ---------------- f1_schedule: 4×3 weekend glance ---------------- */
+
+export function buildScheduleBody(payload: WidgetPayload): React.ReactElement {
+  const p = payload.primary;
+  const upcoming = payload.schedule.filter((e) => e.status !== "CANCELLED").slice(0, 4);
+  return (
+    <FlexWidget style={{ backgroundColor: BG, borderRadius: 14, height: "match_parent", width: "match_parent", flexDirection: "column", justifyContent: "center", padding: 10 }}>
+      <Header label="race weekend" />
+      <TextWidget text={(p?.name ?? "").toUpperCase()} style={{ color: INK, fontSize: 11, fontWeight: "bold", marginTop: 4 }} maxLines={1} />
+      <FlexWidget style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", width: "match_parent" }}>
+        <TextWidget text={p ? shortDate(p.startTime) : ""} style={{ color: DIM, fontSize: 9 }} />
+        <TextWidget text={p ? countdownText(p.startTime, true) : ""} style={{ color: ACCENT, fontSize: 12, fontWeight: "bold" }} />
       </FlexWidget>
+      <Divider />
+      {upcoming.map((e) => (
+        <FlexWidget key={e.id} style={{ flexDirection: "row", justifyContent: "space-between", width: "match_parent", paddingVertical: 1.5 }}>
+          <TextWidget text={e.type.replace(/_/g, " ")} style={{ color: INK, fontSize: 9, fontWeight: "bold" }} />
+          <TextWidget text={shortDate(e.startTime)} style={{ color: DIM, fontSize: 9 }} />
+        </FlexWidget>
+      ))}
+      {payload.mock ? <TextWidget text="MOCK DATA" style={{ color: "#ffb300", fontSize: 7, marginTop: 2 }} /> : null}
+    </FlexWidget>
+  );
+}
+
+/** Unlinked/offline placeholder — clearly actionable, never fake data. */
+export function buildPlaceholder(): React.ReactElement {
+  return (
+    <FlexWidget style={{ backgroundColor: BG, borderRadius: 14, height: "match_parent", width: "match_parent", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: 10 }}>
+      <FlexWidget style={{ backgroundColor: ACCENT, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+        <TextWidget text="F1" style={{ color: "#ffffff", fontSize: 9, fontWeight: "bold" }} />
+      </FlexWidget>
+      <TextWidget text="Open the app to connect this widget." style={{ color: DIM, fontSize: 9, marginTop: 4 }} />
     </FlexWidget>
   );
 }

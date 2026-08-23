@@ -1,31 +1,39 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Text } from "react-native";
+import { useColorScheme } from "react-native";
 
-const TAB_ICONS: Record<string, string> = {
-  index: "⌂",
-  schedule: "📅",
-  sports: "🏆",
-  profile: "👤",
-};
+const TABS = [
+  { name: "index", label: "Home", icon: "home" as const },
+  { name: "schedule", label: "Schedule", icon: "calendar-number" as const },
+  { name: "sports", label: "Sports", icon: "trophy" as const },
+  { name: "profile", label: "Profile", icon: "person-circle" as const },
+];
 
 export default function TabsLayout() {
+  const scheme = useColorScheme();
+  const dark = scheme !== "light";
+
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: "#0B0E14" },
-        headerTintColor: "#F2F5FA",
-        tabBarStyle: { backgroundColor: "#0B0E14", borderTopColor: "#232A38" },
-        tabBarActiveTintColor: "#E10600",
-        tabBarInactiveTintColor: "#9AA5B5",
+        headerStyle: { backgroundColor: dark ? "#0b0e14" : "#ffffff" },
+        headerTintColor: dark ? "#f2f5fa" : "#0c111b",
+        headerShadowVisible: false,
+        tabBarStyle: {
+          backgroundColor: dark ? "#0b0e14" : "#ffffff",
+          borderTopColor: dark ? "#232a38" : "#e3e8f0",
+        },
+        tabBarActiveTintColor: "#e10600",
+        tabBarInactiveTintColor: dark ? "#9aa5b5" : "#55617a",
       }}
     >
-      {Object.entries(TAB_ICONS).map(([name, icon]) => (
+      {TABS.map((tab) => (
         <Tabs.Screen
-          key={name}
-          name={name}
+          key={tab.name}
+          name={tab.name}
           options={{
-            tabBarIcon: () => <Text style={{ fontSize: 18 }}>{icon}</Text>,
-            tabBarLabel: name === "index" ? "Home" : name.charAt(0).toUpperCase() + name.slice(1),
+            tabBarIcon: ({ color, size }) => <Ionicons name={tab.icon} color={color} size={size} />,
+            tabBarLabel: tab.label,
           }}
         />
       ))}

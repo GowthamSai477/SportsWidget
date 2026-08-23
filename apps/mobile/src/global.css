@@ -1,9 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Theme tokens (spec section 11: Dark / Light / System).
+ * Components reference semantic vars through Tailwind color aliases
+ * (bg-surface-raised, text-ink-dim, …); switching appearance swaps the
+ * variables — no component knows which mode is active.
+ */
+
 :root {
-  --font-display:
-    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
-    Segoe UI Symbol, Noto Color Emoji;
-  --font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
-  --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
-  --font-serif: Georgia, 'Times New Roman', serif;
+  --color-surface: #f5f7fb;
+  --color-surface-raised: #ffffff;
+  --color-border: #e3e8f0;
+  --color-ink: #0c111b;
+  --color-ink-dim: #55617a;
+  --color-ink-faint: #8a94a6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #0b0e14;
+    --color-surface-raised: #141822;
+    --color-border: #232a38;
+    --color-ink: #f2f5fa;
+    --color-ink-dim: #9aa5b5;
+    --color-ink-faint: #5b6675;
+  }
 }

@@ -4,17 +4,17 @@
  * in a separate JS context with no Zustand state.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Constants from "expo-constants";
 import type { WidgetPayload } from "@widgets/shared";
+import { baseUrlCandidates, currentBaseUrl, markBaseUrlReachable } from "../api/base-url";
 
 const tokenKey = (widgetName: string) => `widget.token.${widgetName}`;
 
 export function API_BASE_URL(): string {
-  return (
-    process.env.EXPO_PUBLIC_API_URL ??
-    (Constants.expoConfig?.extra as { apiUrl?: string } | undefined)?.apiUrl ??
-    "http://10.0.2.2:3000/api/v1"
-  );
+  return currentBaseUrl();
+}
+
+export function apiCandidates(): string[] {
+  return baseUrlCandidates();
 }
 
 /** Remember which backend widget instance a home-screen widget renders. */
@@ -30,13 +30,25 @@ export async function unassignWidgetInstance(widgetName: string): Promise<void> 
   await AsyncStorage.removeItem(tokenKey(widgetName));
 }
 
-/** Fetch the lightweight widget payload (spec sections 30-31). */
+/**
+ * Fetch the lightweight widget payload, trying every base-URL candidate.
+ * NOTE: AbortSignal.timeout does not exist in Hermes — use AbortController
+ * with a manual timer (8s per candidate).
+ */
 export async function fetchWidgetPayload(instanceToken: string): Promise<WidgetPayload | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL()}/widgets/${instanceToken}/data`);
-    if (!response.ok) return null;
-    return (await response.json()) as WidgetPayload;
-  } catch {
-    return null; // offline: caller renders the last-known-good fallback
+  for (const base of baseUrlCandidates()) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(`${base}/widgets/${instanceToken}/data`, { signal: controller.signal });
+      if (!response.ok) continue;
+      markBaseUrlReachable(base);
+      return (await response.json()) as WidgetPayload;
+    } catch {
+      continue; // offline: caller renders the connect placeholder
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  return null;
 }

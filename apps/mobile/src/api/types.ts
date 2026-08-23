@@ -35,7 +35,9 @@ export interface EventCardDto {
   venue?: { name: string | null; city: string | null; country: string | null } | null;
 }
 
-export interface EventDetailDto extends Omit<EventCardDto, "sport" | "competition"> {
+export interface EventDetailDto extends Omit<EventCardDto, "venue"> {
+  sport: { slug: string; name: string; accentColor: string | null };
+  competition: { slug: string; name: string };
   season?: { name: string } | null;
   venue?: (EventCardDto["venue"] & { slug: string }) | null;
   results: {

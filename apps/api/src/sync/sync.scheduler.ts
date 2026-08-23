@@ -20,7 +20,13 @@ export class SyncScheduler {
     private readonly prisma: PrismaService,
     private readonly sync: SyncService,
     @InjectQueue(QUEUE_SYNC) private readonly queue: Queue,
-  ) {}
+  ) {
+    // The queue owns its own ioredis connections; without this listener a
+    // transient Redis error surfaces as an unhandled 'error' event.
+    this.queue.on("error", (err: Error) => {
+      this.logger.warn(`Sync queue error: ${err.message}`);
+    });
+  }
 
   @Cron("* * * * *")
   async tick(): Promise<void> {

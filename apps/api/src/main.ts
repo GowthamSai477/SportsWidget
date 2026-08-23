@@ -1,12 +1,20 @@
 import { join } from "node:path";
-import { ValidationPipe } from "@nestjs/common";
+import { Logger, ValidationPipe, VersioningType } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import { VersioningType } from "@nestjs/common";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
+
+/**
+ * Dev-resilience net: transient infra flaps (Redis MISCONF, dropped queue
+ * connections) must log loudly, never kill the backend that physical devices
+ * are testing against. Production should still alert on these.
+ */
+const bootstrapLogger = new Logger("Process");
+process.on("uncaughtException", (err) => bootstrapLogger.error(`uncaughtException: ${err.stack ?? err.message}`));
+process.on("unhandledRejection", (err) => bootstrapLogger.error(`unhandledRejection: ${String(err)}`));
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {

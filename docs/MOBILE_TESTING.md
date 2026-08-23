@@ -150,6 +150,10 @@ Refresh cadence reality check: Android updates system widgets at ≥30-minute in
 
 ---
 
+## Release APK + HTTP: cleartext
+
+Android RELEASE builds block plain `http://` API calls by default (debug builds allow them — one reason a debug APK may "work" while release shows empty screens). This project enables `usesCleartextTraffic` via the `expo-build-properties` plugin for development. Before any production release, move the API to HTTPS and remove that flag.
+
 ## Troubleshooting
 
 | Symptom | Cause → Fix |

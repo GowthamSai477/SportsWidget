@@ -5,21 +5,22 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Design system tokens (spec section 57)
+        // Semantic tokens resolved from CSS variables in src/global.css —
+        // this is what makes dark/light/system theming work at runtime.
         surface: {
-          DEFAULT: "#0B0E14",
-          raised: "#141822",
-          border: "#232A38",
+          DEFAULT: "var(--color-surface)",
+          raised: "var(--color-surface-raised)",
+          border: "var(--color-border)",
         },
         ink: {
-          DEFAULT: "#F2F5FA",
-          dim: "#9AA5B5",
-          faint: "#5B6675",
+          DEFAULT: "var(--color-ink)",
+          dim: "var(--color-ink-dim)",
+          faint: "var(--color-ink-faint)",
         },
         accent: {
-          DEFAULT: "#E10600", // F1 red default; overridden per-sport at runtime
-          live: "#00C853",
-          warn: "#FFB300",
+          DEFAULT: "#e10600",
+          live: "#00c853",
+          warn: "#ffb300",
         },
       },
       borderRadius: {

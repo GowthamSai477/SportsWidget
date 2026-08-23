@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./client";
+import { baseUrlCandidates, currentBaseUrl, markBaseUrlReachable } from "./base-url";
 import { ApiError } from "./types";
 import type {
   CompetitionDto,
@@ -31,25 +31,45 @@ async function request<T>(path: string, init?: RequestInit & { auth?: boolean })
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
-  } catch {
-    throw new ApiError(0, "Network unavailable");
+  // Try base-URL candidates starting from the last known-good one; a network
+  // error moves to the next candidate, an HTTP answer pins it as working.
+  const candidates = baseUrlCandidates();
+  const startIndex = Math.max(0, candidates.indexOf(currentBaseUrl()));
+  let lastNetworkError = true;
+
+  for (let attempt = 0; attempt < candidates.length; attempt++) {
+    const base = candidates[(startIndex + attempt) % candidates.length];
+    let response: Response;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      response = await fetch(`${base}${path}`, { ...init, headers, signal: controller.signal });
+    } catch {
+      clearTimeout(timer);
+      lastNetworkError = true;
+      continue;
+    }
+    clearTimeout(timer);
+    markBaseUrlReachable(base);
+    lastNetworkError = false;
+
+    if (response.status === 204) return undefined as T;
+    const payload = (await response.json().catch(() => null)) as T | { message?: string } | null;
+
+    if (!response.ok) {
+      const message =
+        typeof payload === "object" && payload && "message" in payload
+          ? String((payload as { message?: string }).message)
+          : `Request failed (${response.status})`;
+      throw new ApiError(response.status, message);
+    }
+    return payload as T;
   }
 
-  if (response.status === 204) return undefined as T;
-  const payload = (await response.json().catch(() => null)) as T | { message?: string } | null;
-
-  if (!response.ok) {
-    const message =
-      typeof payload === "object" && payload && "message" in payload
-        ? String((payload as { message?: string }).message)
-        : `Request failed (${response.status})`;
-    throw new ApiError(response.status, message);
-  }
-  return payload as T;
+  if (lastNetworkError) throw new ApiError(0, "Network unavailable");
+  throw new ApiError(0, "No API endpoint configured");
 }
+
 
 export interface SessionTokens {
   accessToken: string;
