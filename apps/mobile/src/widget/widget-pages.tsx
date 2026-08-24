@@ -201,3 +201,23 @@ export function buildPlaceholder(): React.ReactElement {
     </FlexWidget>
   );
 }
+
+/** Backend unreachable after linking — honest error with a recovery hint (spec Phase 23). */
+export function buildErrorBody(): React.ReactElement {
+  return (
+    <FlexWidget clickAction="REFRESH" style={{ backgroundColor: BG, borderRadius: 14, height: "match_parent", width: "match_parent", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: 10 }}>
+      <FlexWidget style={{ backgroundColor: ACCENT, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+        <TextWidget text="F1" style={{ color: "#ffffff", fontSize: 9, fontWeight: "bold" }} />
+      </FlexWidget>
+      <TextWidget text="Unable to update" style={{ color: INK, fontSize: 11, fontWeight: "bold", marginTop: 4 }} />
+      <TextWidget text="Tap to refresh" style={{ color: DIM, fontSize: 9, marginTop: 2 }} />
+    </FlexWidget>
+  );
+}
+
+/** Render the correct family body for a widget name. */
+export async function buildFamilyBody(widgetName: string, payload: WidgetPayload): Promise<React.ReactElement> {
+  if (widgetName === "f1_premium") return buildPremiumBody(payload, widgetName);
+  if (widgetName === "f1_schedule") return buildScheduleBody(payload);
+  return buildNextBody(payload);
+}

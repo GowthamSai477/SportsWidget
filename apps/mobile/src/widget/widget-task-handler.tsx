@@ -1,12 +1,16 @@
-import { registerWidgetTaskHandler } from "react-native-android-widget";
-import { advancePage, buildNextBody, buildPlaceholder, buildPremiumBody, buildScheduleBody, PAGE_COUNT } from "./widget-pages";
+import { requestWidgetUpdate, registerWidgetTaskHandler } from "react-native-android-widget";
+import { advancePage, buildErrorBody, buildFamilyBody, buildPlaceholder, PAGE_COUNT } from "./widget-pages";
 import { assignedWidgetToken, fetchWidgetPayload } from "./widget-data";
 
 /**
  * Headless widget task (react-native-android-widget). Runs on system
  * add/update/resize/click. Fetches the lightweight payload from our backend
  * by the instance token linked in the app (spec section 31: widgets never
- * talk to sports providers directly; offline renders the connect placeholder).
+ * talk to sports providers directly).
+ *
+ * Error states (spec Phase 23):
+ *  - never linked     → "Open the app to connect this widget."
+ *  - linked, offline  → "Unable to update / Tap to refresh" (tap re-fetches).
  */
 
 registerWidgetTaskHandler(async ({ widgetInfo, widgetAction, clickAction, renderWidget }) => {
@@ -21,18 +25,31 @@ registerWidgetTaskHandler(async ({ widgetInfo, widgetAction, clickAction, render
   }
 
   const token = await assignedWidgetToken(name);
-  const payload = token ? await fetchWidgetPayload(token) : null;
-
-  if (!payload) {
+  if (!token) {
     renderWidget(buildPlaceholder());
     return;
   }
 
-  if (isPremium) {
-    renderWidget(await buildPremiumBody(payload, name));
-  } else if (name === "f1_schedule") {
-    renderWidget(buildScheduleBody(payload));
-  } else {
-    renderWidget(buildNextBody(payload));
+  // A tap on the error body arrives as clickAction "REFRESH" and re-fetches.
+  const payload = await fetchWidgetPayload(token);
+  if (!payload) {
+    renderWidget(buildErrorBody());
+    return;
   }
+
+  renderWidget(await buildFamilyBody(name, payload));
 });
+
+/** Re-render every placed widget of `name` from the APP process (Test button). */
+export async function refreshWidgetFromApp(name: string): Promise<void> {
+  await requestWidgetUpdate({
+    widgetName: name,
+    renderWidget: async () => {
+      const token = await assignedWidgetToken(name);
+      const payload = token ? await fetchWidgetPayload(token) : null;
+      if (!payload) return buildErrorBody();
+      return buildFamilyBody(name, payload);
+    },
+  });
+}
+

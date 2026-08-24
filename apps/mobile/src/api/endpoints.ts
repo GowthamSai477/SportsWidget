@@ -76,6 +76,7 @@ export interface SessionTokens {
   refreshToken: string;
 }
 
+// Full-season fetch: the calendar needs past AND future; 200 covers any season.
 export const api = {
   devLogin: (email: string, name?: string) =>
     request<SessionTokens & { user: { id: string } }>("/auth/dev/login", {
@@ -99,7 +100,7 @@ export const api = {
 
   liveEvents: () => request<EventCardDto[]>("/events/live"),
 
-  eventsForCompetition: async (competitionSlug: string, limit = 50): Promise<{ items: EventCardDto[]; total: number }> => {
+  eventsForCompetition: async (competitionSlug: string, limit = 200): Promise<{ items: EventCardDto[]; total: number }> => {
     const page = await request<{ items: EventCardDto[]; total: number }>(
       `/events?competition=${competitionSlug}&limit=${limit}&sort=asc`,
     );

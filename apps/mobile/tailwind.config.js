@@ -12,11 +12,16 @@ module.exports = {
           raised: "var(--color-surface-raised)",
           border: "var(--color-border)",
         },
+        muted: 'var(--color-surface-muted)',
         ink: {
           DEFAULT: "var(--color-ink)",
           dim: "var(--color-ink-dim)",
           faint: "var(--color-ink-faint)",
         },
+        success: 'var(--color-success)',
+        warning: 'var(--color-warning)',
+        danger: 'var(--color-danger)',
+        disabled: 'var(--color-disabled)',
         accent: {
           DEFAULT: "#e10600",
           live: "#00c853",

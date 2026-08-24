@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { useColorScheme } from "react-native";
+import { useAppTheme } from "../../hooks/use-app-theme";
 
 const TABS = [
   { name: "index", label: "Home", icon: "home" as const },
@@ -10,8 +10,7 @@ const TABS = [
 ];
 
 export default function TabsLayout() {
-  const scheme = useColorScheme();
-  const dark = scheme !== "light";
+  const { dark } = useAppTheme();
 
   return (
     <Tabs

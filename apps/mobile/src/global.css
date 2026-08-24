@@ -15,7 +15,12 @@
   --color-border: #e3e8f0;
   --color-ink: #0c111b;
   --color-ink-dim: #55617a;
-  --color-ink-faint: #8a94a6;
+  --color-ink-faint: #7a8698;
+  --color-surface-muted: #eceff5;
+  --color-success: #0f9d58;
+  --color-warning: #e8a100;
+  --color-danger: #d3273e;
+  --color-disabled: #b6bdc9;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +30,11 @@
     --color-border: #232a38;
     --color-ink: #f2f5fa;
     --color-ink-dim: #9aa5b5;
-    --color-ink-faint: #5b6675;
+    --color-ink-faint: #6b7688;
+  --color-surface-muted: #1a1f2b;
+  --color-success: #2bd97c;
+  --color-warning: #ffb300;
+  --color-danger: #ff4d5e;
+  --color-disabled: #4a5568;
   }
 }

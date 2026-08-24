@@ -29,6 +29,6 @@ export class ListEventsQuery {
   @IsOptional() @IsISO8601() to?: string;
 
   @Type(() => Number) @IsInt() @Min(1) page: number = 1;
-  @Type(() => Number) @IsInt() @Min(1) @Max(100) limit: number = 20;
+  @Type(() => Number) @IsInt() @Min(1) @Max(200) limit: number = 20;
   @IsIn(["asc", "desc"]) sort: "asc" | "desc" = "asc";
 }
