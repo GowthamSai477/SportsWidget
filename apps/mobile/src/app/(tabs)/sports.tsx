@@ -65,7 +65,7 @@ export default function SportsScreen() {
     <>
       <Stack.Screen options={{ title: "Sports" }} />
       <SectionList
-        className="flex-1 px-4 pt-2"
+        className="flex-1 bg-surface px-4 pt-2"
         sections={sections}
         keyExtractor={(item) => item.slug}
         renderSectionHeader={({ section }) => (

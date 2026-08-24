@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { Stack } from "expo-router";
 import { EmptyState, SectionHeader, SkeletonList } from "../../components/ui";
 import { useCompetitions, useCreateWidget, useMyWidgets, useDeleteWidget } from "../../hooks/queries";

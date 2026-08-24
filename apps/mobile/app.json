@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "Widgets",
     "slug": "mobile",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",
@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.mobile",
-      "versionCode": 1,
+      "versionCode": 2,
       "usesCleartextTraffic": true
     },
     "web": {
@@ -56,7 +56,8 @@
               "minHeight": "110dp",
               "targetCellWidth": 4,
               "targetCellHeight": 2,
-              "resizeMode": "horizontal|vertical"
+              "resizeMode": "horizontal|vertical",
+              "previewImage": "./assets/widget-previews/f1_premium.png"
             },
             {
               "name": "f1_next",
@@ -65,7 +66,8 @@
               "minWidth": "110dp",
               "minHeight": "70dp",
               "targetCellWidth": 2,
-              "targetCellHeight": 2
+              "targetCellHeight": 2,
+              "previewImage": "./assets/widget-previews/f1_next.png"
             },
             {
               "name": "f1_schedule",
@@ -74,7 +76,8 @@
               "minWidth": "250dp",
               "minHeight": "180dp",
               "targetCellWidth": 4,
-              "targetCellHeight": 3
+              "targetCellHeight": 3,
+              "previewImage": "./assets/widget-previews/f1_weekend.png"
             }
           ]
         }

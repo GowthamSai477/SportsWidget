@@ -3,39 +3,56 @@
 All notable changes to the Widgets platform. Format follows Keep a Changelog;
 versioning is semver (0.x.x during pre-production development).
 
-## [0.1.0] — 2026-08-23
+## [0.2.0] — 2026-08-25
 
-First stable internal phase: complete vertical slice — backend, mobile app,
-and Android home-screen widgets — for Formula 1, on the universal multi-sport
-architecture.
+V1.2 device-fix release: dark mode completion, information-architecture cleanup,
+F1 teams & drivers hub, data freshness, and the Android widget preview/connection
+fixes found during the second S25 FE device test.
 
 ### Added
-- Monorepo (`apps/api`, `apps/mobile`, `packages/shared`) with Docker dev environment (PostgreSQL 16, Redis 7).
-- Universal sports data model (25 Prisma models): sports/competitions/seasons/rounds/events/participants/results/standings, favorites, widgets, devices, notifications, plans/subscriptions/entitlements scaffolding, provider sources/mappings, sync jobs/logs.
-- Provider abstraction (`SportsProvider`) with two adapters:
-  - `jolpica-f1` — keyless Ergast-compatible F1 API (token-bucket rate limiting, retry/backoff, Zod validation of untrusted payloads); real 2026 season ingested.
-  - `mock-f1` — perpetual synthetic season covering UPCOMING/LIVE/FINISHED/DELAYED/POSTPONED/CANCELLED; every payload flagged `mock` end-to-end.
-- BullMQ sync pipeline with adaptive cadence (live→60s · <24h→30min · <1h→5min · finished-without-results→once · nightly sweep) and provider-mapping-based upserts (internal IDs never leak).
-- NestJS REST API `/api/v1/*` (Swagger at `/api/docs`): sports, competitions (+`leagues` alias), events (upcoming/live/filter/detail), standings, teams, favorites, devices, notifications+preferences, widgets CRUD, health.
-- JWT auth (access + rotating refresh with reuse detection) and development-mode login gate; entitlement service with `DEVELOPMENT_MODE` master unlock.
-- Widget data endpoint `GET /widgets/:instanceToken/data` with status-aware cache TTLs (LIVE 10s → upcoming 300s).
-- Expo (SDK 57) mobile app: Home / Schedule / Sports / Profile tabs, competition detail with drivers & constructors tables, event detail with results and weekend sessions, settings; offline-first persisted query cache; NativeWind design system.
-- Android home-screen widgets via react-native-android-widget: `f1_premium` (4×2, tap-cycle pages: countdown ⇄ standings), `f1_next` (2×2), `f1_schedule` (4×3); opaque instance-token auth; MOCK DATA labeling.
-- Notification inbox rows fanned out on LIVE transitions and results for favoriters.
-- Docs: DECISIONS, ARCHITECTURE, DATABASE, API, SPORTS_PROVIDERS, WIDGETS, DEVELOPMENT, ENVIRONMENT, MOBILE_TESTING.
-- Test suite: adaptive-cadence policy, status reconciliation (`mergeStatus`), redis URL parsing, shared wire-schema validation (15 tests).
+- Manual **Light / Dark / System theme selector** (Settings → Appearance) — persists, applies instantly, System follows the device (Zustand-persisted + NativeWind runtime scheme override).
+- **F1 Teams & Drivers hub** on the competition screen: all teams as cards (monogram mark, championship position/points, both drivers with codes and points), driven by a new `GET /api/v1/competitions/:slug/teams` endpoint that keeps team and driver championship contexts strictly separate.
+- **View all drivers** toggle under the top-10 drivers championship.
+- Collapsible **Drivers / Constructors championship dropdowns** on the Home What's-Next card (collapsed by default).
+- **API base-URL fallback chain**: primary URL → 10.0.2.2 (emulator) → localhost (adb reverse) → Windows-hotspot gateway; first reachable wins, 8s per-candidate timeout (AbortController — Hermes has no AbortSignal.timeout).
+- **Automatic token refresh** on 401 (rotating refresh → retry → dev re-login as last resort) — fixes silent Create-Instance/auth failures after the 15-minute access-token expiry.
+- **Widget picker preview images** for all three families (generated dark-themed previews wired via `previewImage`) — the picker no longer shows blank white tiles.
+- **Widget error state**: "F1 · Unable to update · Tap to refresh" (tap re-fetches) distinct from the unlinked "Open the app to connect" state; whole-widget tap refreshes.
+- **Test button** per widget instance — re-renders placed widgets from the app immediately (`requestWidgetUpdate`).
+- 6-hourly standings sync sweep (standings change after every race; nightly-only went stale) and `@Max 200` event-page size for full-season fetches.
+- Subtle **Widgets entry animation** on Home: low-frequency (3.5s) sport-icon cycle, paused off-screen, no continuous CPU burn.
+
+### Changed
+- **Home information architecture**: removed the redundant Upcoming section (the full schedule lives in Schedule); What's Next + Live + My Sports remain.
+- **Live Now idle state**: compact single-line bar instead of a large empty card; full live card returns when a session is live.
+- App display name "mobile" → **"Widgets"** (launcher + widget picker header).
+- Dark mode: every tab screen now paints its themed background explicitly (fixes light content areas inside the dark navigation); token set extended (success/warning/danger/muted) with contrast-tuned light/dark values.
+- Standings/team championship contexts are read strictly from their own tables (driver points no longer pollute team rows).
 
 ### Fixed
-- Refresh token reuse now revokes the whole token family (theft containment).
-- Standings sync adopted existing rounds/entities on unique conflicts instead of failing when providers were switched or mappings were rebuilt.
-- Team display names no longer borrow a driver's code; refreshed every pass.
-- BullMQ custom job IDs use `|` separators (`:` is rejected by BullMQ).
-- Widget registration is platform-guarded so web builds work.
-- Redis/ioredis error events are handled (degrade, don't crash); worker errors logged via `@OnWorkerEvent`.
-- Docker volumes moved to Docker-managed storage after Windows bind-mount AOF I/O corruption (`MISCONF`).
+- `Object.groupBy` / `AbortSignal.timeout` (unsupported in Hermes) crashes.
+- Schedule fetched only the first 50 season events (all past) — now fetches the complete season.
+- Stale standings served from cache after sync (cache key cleared; sweep added).
+- Silent Create-Instance failures now surface an error dialog with the reason.
 
 ### Known issues / limitations
-- No true swipe gestures inside Android widgets (RemoteViews limitation) — tap-to-cycle pages instead.
-- Jolpica-F1 provides no live timing; live states in dev come from mock fixtures (labeled MOCK DATA).
-- Widget refresh cadence limited by Android platform minimum (30 min system updates); taps/app opens refresh sooner.
-- Debug APKs contain no embedded JS — they require Metro + `adb reverse`.
+- Android RemoteViews: no gesture swipes (tap-to-cycle pages instead); widget refresh cadence platform-limited (≥30 min system updates + taps + Test button).
+- Manual timezone selector deferred (device timezone used); calendar view deferred.
+- Team logos use generated monogram marks pending licensed assets.
+
+## [0.1.0] — 2026-08-23
+
+First stable internal phase: complete F1 vertical slice (backend + mobile + Android widgets).
+
+### Added
+- Monorepo (apps/api, apps/mobile, packages/shared) with Docker dev environment.
+- Universal sports data model (25 Prisma models), provider abstraction with Jolpica-F1 (real 2026 data) and mock-f1 fixtures.
+- BullMQ adaptive sync pipeline, cached REST API with Swagger, JWT auth with rotating refresh, entitlement scaffolding.
+- Expo mobile app (Home/Schedule/Sports/Profile, offline-first cache) and Android home-screen widgets (3 families, token-authenticated payloads).
+- Docs set (DECISIONS/ARCHITECTURE/DATABASE/API/SPORTS_PROVIDERS/WIDGETS/DEVELOPMENT/ENVIRONMENT/MOBILE_TESTING) and 15 unit tests.
+
+### Fixed (post-release device-test round)
+- NativeWind styles not applying on device (missing Tailwind directives in global.css).
+- Cleartext HTTP blocked on release builds (usesCleartextTraffic for development).
+- Wrong-directory Expo startup footgun documented; entry discipline established.
+- Redis AOF corruption crashes (named volumes, AOF off, process-level error nets).

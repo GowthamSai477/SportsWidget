@@ -59,7 +59,7 @@ export default function ProfileScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Profile" }} />
-      <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView className="flex-1 bg-surface px-4" contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Identity card */}
         <View className="bg-surface-raised rounded-card border border-surface-border mt-4 p-5 flex-row items-center">
           <View className="w-16 h-16 rounded-full items-center justify-center" style={{ backgroundColor: "#e1060022" }}>

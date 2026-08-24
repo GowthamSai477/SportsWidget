@@ -74,6 +74,23 @@ export class SyncScheduler {
     if (enqueued > 0) this.logger.debug(`tick enqueued ${enqueued}/${due.length} due items`);
   }
 
+  /** Standings change after every race — refresh every 6 hours. */
+  @Cron("0 */6 * * *")
+  async standingsSweep(): Promise<void> {
+    const competitions = await this.prisma.competition.findMany({
+      where: { isActive: true, seasons: { some: { isCurrent: true } } },
+      select: { slug: true },
+    });
+    const bucket = new Date().toISOString().slice(0, 13); // hourly dedup
+    for (const comp of competitions) {
+      await this.queue.add(SYNC_JOB.standings, { competitionSlug: comp.slug } satisfies StandingsJobData, {
+        jobId: `sweep|${SYNC_JOB.standings}|${comp.slug}|${bucket}`,
+        removeOnComplete: { age: 172_800 },
+      });
+    }
+    this.logger.log(`standings sweep queued ${competitions.length} competitions`);
+  }
+
   /** Nightly full sweep for every active competition (covers far-future events). */
   @Cron("0 3 * * *")
   async nightlySweep(): Promise<void> {

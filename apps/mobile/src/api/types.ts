@@ -82,6 +82,22 @@ export interface WidgetInstanceDto {
   competition?: { slug: string; name: string } | null;
 }
 
+export interface CompetitionTeamDto {
+  id: string;
+  slug: string;
+  name: string;
+  shortName: string | null;
+  championship: { position: number; points: number } | null;
+  drivers: {
+    id: string;
+    slug: string;
+    name: string;
+    shortName: string | null;
+    number: number | null;
+    championship: { position: number; points: number } | null;
+  }[];
+}
+
 export interface MeResponseDto {
   id: string;
   email: string | null;

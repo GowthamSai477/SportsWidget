@@ -39,6 +39,15 @@ export function useEventDetail(id?: string) {
   });
 }
 
+export function useCompetitionTeams(slug?: string) {
+  return useQuery({
+    queryKey: ["teams", slug],
+    queryFn: () => api.competitionTeams(slug as string),
+    enabled: Boolean(slug),
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useStandings(competitionSlug?: string) {
   return useQuery({
     queryKey: ["standings", competitionSlug],
